@@ -1,0 +1,325 @@
+// firmir-player UI: the whole window is declared in Firml and compiled to
+// C++ by firmlc at build time. The playback/browsing logic lives in
+// PlayerApp (PlayerApp.cpp): the transport buttons call its methods, the
+// labels bind to its properties, the file list is fileModel (rebuilt on
+// every directory change), the video page hosts the VideoOutput, the
+// photos page hosts the Image item.
+#include <firmir/items/Window.hpp>
+#include <firmir/items/Rectangle.hpp>
+#include <firmir/items/Text.hpp>
+#include <firmir/items/Button.hpp>
+#include <firmir/items/Item.hpp>
+#include <firmir/items/Column.hpp>
+#include <firmir/items/Repeater.hpp>
+#include <firmir/items/ListModel.hpp>
+#include <firmir/gui-controls/ScrollView.hpp>
+#include <firmir/items/VideoOutput.hpp>
+#include <firmir/items/Image.hpp>
+#include <firmir/items/EditableText.hpp>
+#include <firmir/items/MouseArea.hpp>
+#include "PlayerApp.hpp"
+
+Firmir.Gui.Window {
+    id: root
+    title: "firmir-player"
+    width: 800
+    height: 480
+
+    PlayerApp {
+        id: player
+    }
+
+    ListModel {
+        id: fileModel
+    }
+
+    Rectangle {
+        anchors.fill: parent
+        color: "#1C1E24"
+    }
+
+    // Header: media-kind tabs + window controls.
+    Rectangle {
+        id: header
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: parent.top
+        }
+        height: 44
+        color: "#141518"
+
+        Button {
+            x: 8
+            y: 6
+            width: 90
+            height: 32
+            text: "Files"
+            onClicked: player.showPage(0)
+        }
+        Button {
+            x: 106
+            y: 6
+            width: 90
+            height: 32
+            text: "Video"
+            onClicked: player.showPage(1)
+        }
+        Button {
+            x: 204
+            y: 6
+            width: 90
+            height: 32
+            text: "Photos"
+            onClicked: player.showPage(2)
+        }
+        Button {
+            id: closeButton
+            width: 32
+            height: 32
+            text: "X"
+            anchors {
+                right: parent.right
+                top: parent.top
+                rightMargin: 6
+                topMargin: 6
+            }
+            onClicked: App.close()
+        }
+        Button {
+            id: maxButton
+            width: 32
+            height: 32
+            text: "[]"
+            anchors {
+                right: closeButton.left
+                top: parent.top
+                rightMargin: 4
+                topMargin: 6
+            }
+            onClicked: App.toggleMaximized()
+        }
+        Button {
+            width: 32
+            height: 32
+            text: "_"
+            anchors {
+                right: maxButton.left
+                top: parent.top
+                rightMargin: 4
+                topMargin: 6
+            }
+            onClicked: App.showMinimized()
+        }
+    }
+
+    // Bottom control bar shared by all pages (seek bar on top, transport
+    // buttons below).
+    Rectangle {
+        id: controlBar
+        anchors {
+            left: parent.left
+            right: parent.right
+            bottom: parent.bottom
+        }
+        height: 84
+        color: "#141518"
+
+        // Seek bar: click or drag to jump; the fill tracks the playback
+        // position relative to the duration.
+        Rectangle {
+            id: seekBar
+            x: 12
+            y: 10
+            width: 776
+            height: 12
+            color: "#2A2D34"
+
+            Rectangle {
+                width: player.duration > 0 ? seekBar.width * player.position / player.duration : 0
+                height: seekBar.height
+                color: "#4A90D9"
+            }
+            MouseArea {
+                id: seekArea
+                anchors.fill: parent
+                onPressedChanged: player.seek(player.duration * seekArea.mouseX / seekBar.width)
+            }
+        }
+
+        Button {
+            x: 12
+            y: 38
+            width: 52
+            height: 36
+            text: "|<"
+            onClicked: player.prevTrack()
+        }
+        Button {
+            x: 72
+            y: 38
+            width: 52
+            height: 36
+            text: ">"
+            onClicked: player.play()
+        }
+        Button {
+            x: 132
+            y: 38
+            width: 52
+            height: 36
+            text: "||"
+            onClicked: player.pause()
+        }
+        Button {
+            x: 192
+            y: 38
+            width: 52
+            height: 36
+            text: "[]"
+            onClicked: player.stop()
+        }
+        Button {
+            x: 252
+            y: 38
+            width: 52
+            height: 36
+            text: ">|"
+            onClicked: player.nextTrack()
+        }
+        Text {
+            x: 340
+            y: 46
+            fontSize: 16
+            color: "#E8E8E8"
+            text: player.positionText
+        }
+        Text {
+            x: 420
+            y: 48
+            fontSize: 13
+            color: "#9098A8"
+            text: player.statusText
+        }
+    }
+
+    // ----------------------------- browser page -----------------------------
+    Item {
+        id: browserPage
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: header.bottom
+            bottom: controlBar.top
+        }
+        visible: player.page == 0
+
+        Text {
+            x: 12
+            y: 8
+            fontSize: 16
+            color: "#E8E8E8"
+            text: player.nowPlaying
+        }
+        // Up one level; the full path is shown next to it.
+        Button {
+            x: 12
+            y: 32
+            width: 60
+            height: 32
+            text: "Up"
+            onClicked: player.goUp()
+        }
+        Text {
+            x: 80
+            y: 40
+            fontSize: 13
+            color: "#9098A8"
+            text: player.currentDir
+        }
+        // Open an arbitrary path by typing it (Enter or the button).
+        EditableText {
+            id: pathEdit
+            x: 12
+            y: 72
+            width: 640
+            height: 32
+            onAccepted: player.openPath(pathEdit.text)
+        }
+        Button {
+            x: 660
+            y: 72
+            width: 128
+            height: 32
+            text: "open"
+            onClicked: player.openPath(pathEdit.text)
+        }
+        ScrollView {
+            x: 12
+            y: 112
+            width: 776
+            height: 260
+            contentWidth: 750
+            contentHeight: fileModel.count * 32 + 8
+
+            Column {
+                spacing: 2
+                Repeater {
+                    model: fileModel
+                    Button {
+                        width: 750
+                        height: 30
+                        text: model.label
+                        color: model.dir ? "#3A4A66" : (model.video ? "#2A3850" : "#2E3138")
+                        onClicked: player.activate(index)
+                    }
+                }
+            }
+        }
+    }
+
+    // ------------------------------ video page ------------------------------
+    Item {
+        id: videoPage
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: header.bottom
+            bottom: controlBar.top
+        }
+        visible: player.page == 1
+
+        Firmir.Multimedia.VideoOutput {
+            id: video
+            anchors.fill: parent
+            fillMode: "PreserveAspectFit"
+        }
+    }
+
+    // ----------------------------- photos page ------------------------------
+    Item {
+        id: photosPage
+        anchors {
+            left: parent.left
+            right: parent.right
+            top: header.bottom
+            bottom: controlBar.top
+        }
+        visible: player.page == 2
+
+        // The PlayerApp sets photo.source when an image file is activated.
+        Image {
+            id: photo
+            anchors.fill: parent
+            fillMode: "PreserveAspectFit"
+        }
+        Text {
+            x: 24
+            y: 24
+            fontSize: 18
+            color: "#9098A8"
+            visible: photo.status == 0
+            text: "no image selected"
+        }
+    }
+}
